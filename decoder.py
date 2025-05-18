@@ -39,6 +39,11 @@ class RNADecoder(nn.Module):
         # Input shape: [batch_size, seq_len, input_dim]
         batch_size, seq_len, _ = x.shape
         
+        # Check for nan values in input
+        if torch.isnan(x).any():
+            print("Warning: NaN values in decoder input")
+            x = torch.nan_to_num(x, nan=0.0)
+        
         # Project input to hidden dimension
         x = self.input_proj(x)  # [batch_size, seq_len, hidden_dim]
         
@@ -47,8 +52,10 @@ class RNADecoder(nn.Module):
         
         # Handle mask
         if mask is not None:
-            # mask shape should be [batch_size, seq_len]
-            # Convert True to 1, False to 0 for padding mask
+            # Convert padding mask to attention mask
+            # True values in mask indicate padding positions
+            # For attention, we want to mask out padding positions
+            mask = ~mask  # Invert the mask
             mask = mask.bool()
         
         for i in range(len(self.attention_layers)):
@@ -58,10 +65,20 @@ class RNADecoder(nn.Module):
             x, _ = self.attention_layers[i](x, x, x, key_padding_mask=mask)
             x = residual + x
             
+            # Check for nan values after attention
+            if torch.isnan(x).any():
+                print(f"Warning: NaN values after attention layer {i}")
+                x = torch.nan_to_num(x, nan=0.0)
+            
             # Feed forward
             residual = x
             x = self.layer_norms2[i](x)
             x = residual + self.ffn_layers[i](x)
+            
+            # Check for nan values after FFN
+            if torch.isnan(x).any():
+                print(f"Warning: NaN values after FFN layer {i}")
+                x = torch.nan_to_num(x, nan=0.0)
         
         # Project to output space
         logits = self.output_proj(x)  # [seq_len, batch_size, 4]
