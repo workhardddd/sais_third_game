@@ -9,6 +9,7 @@ from tqdm import tqdm
 import os
 from sklearn.model_selection import train_test_split
 from Bio import SeqIO
+import torch.nn.functional as F
 
 class RNADataset(Dataset):
     def __init__(self, coords_dir, split='train', test_size=0.2, random_state=42):
@@ -156,17 +157,45 @@ def train_epoch(model, train_loader, criterion, optimizer, device):
         padding_mask = padding_mask.to(device)  # [B, L]
         confidence = confidence.to(device)  # [B, L]
         
+        # Check for nan values in input
+        if torch.isnan(coords).any():
+            print("Warning: NaN values found in coordinates")
+            coords = torch.nan_to_num(coords, nan=0.0)
+        
         # Forward pass
         optimizer.zero_grad()
         logits = model(coords, coord_mask, padding_mask, confidence)  # [B, L, 4]
         
+        # Check for nan values in logits
+        if torch.isnan(logits).any():
+            print("Warning: NaN values found in model output")
+            continue
+        
         # Calculate loss (ignore padding tokens)
         logits = logits.contiguous().reshape(-1, 4)
         labels = labels.contiguous().reshape(-1)
-        loss = criterion(logits, labels)
         
-        # Backward pass
+        # Apply softmax with numerical stability
+        logits = F.log_softmax(logits, dim=-1)
+        
+        # Calculate loss only on non-padding tokens
+        mask = labels != -100
+        if mask.sum() == 0:
+            print("Warning: No valid tokens in batch")
+            continue
+            
+        loss = F.nll_loss(logits[mask], labels[mask])
+        
+        # Check if loss is nan
+        if torch.isnan(loss):
+            print("Warning: NaN loss detected")
+            print(f"Logits stats: min={logits.min()}, max={logits.max()}, mean={logits.mean()}")
+            print(f"Labels stats: min={labels.min()}, max={labels.max()}")
+            continue
+        
+        # Backward pass with gradient clipping
         loss.backward()
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
         optimizer.step()
         
         total_loss += loss.item()
@@ -188,28 +217,61 @@ def evaluate(model, test_loader, criterion, device):
             padding_mask = padding_mask.to(device)  # [B, L]
             confidence = confidence.to(device)  # [B, L]
             
+            # Check for nan values in input
+            if torch.isnan(coords).any():
+                print("Warning: NaN values found in coordinates")
+                coords = torch.nan_to_num(coords, nan=0.0)
+            
             # Forward pass
             logits = model(coords, coord_mask, padding_mask, confidence)  # [B, L, 4]
+            
+            # Check for nan values in logits
+            if torch.isnan(logits).any():
+                print("Warning: NaN values found in model output")
+                continue
             
             # Calculate loss (ignore padding tokens)
             logits = logits.contiguous().reshape(-1, 4)
             labels = labels.contiguous().reshape(-1)
-            loss = criterion(logits, labels)
+            
+            # Apply softmax with numerical stability
+            logits = F.log_softmax(logits, dim=-1)
+            
+            # Calculate loss only on non-padding tokens
+            mask = labels != -100
+            if mask.sum() == 0:
+                print("Warning: No valid tokens in batch")
+                continue
+                
+            loss = F.nll_loss(logits[mask], labels[mask])
+            
+            # Check if loss is nan
+            if torch.isnan(loss):
+                print("Warning: NaN loss detected")
+                print(f"Logits stats: min={logits.min()}, max={logits.max()}, mean={logits.mean()}")
+                print(f"Labels stats: min={labels.min()}, max={labels.max()}")
+                continue
+            
             total_loss += loss.item()
             
             # Calculate accuracy (ignore padding tokens)
-            predictions = torch.argmax(logits.reshape(-1, 4), dim=-1)  # [B*L]
-            mask = labels != -100
+            predictions = torch.argmax(logits, dim=-1)  # [B*L]
             correct += (predictions[mask] == labels[mask]).sum().item()
             total += mask.sum().item()
     
-    accuracy = correct / total
+    accuracy = correct / total if total > 0 else 0
     avg_loss = total_loss / len(test_loader)
     return avg_loss, accuracy
 
-def train_model(model, train_loader, test_loader, args):
+def train_model(model, train_loader, test_loader, args, checkpoint_path=None):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = model.to(device)
+    
+    # Load checkpoint if provided
+    if checkpoint_path and os.path.exists(checkpoint_path):
+        print(f"Loading checkpoint from {checkpoint_path}")
+        model.load_state_dict(torch.load(checkpoint_path, map_location=device))
+        print("Checkpoint loaded successfully")
     
     criterion = nn.CrossEntropyLoss(ignore_index=-100)
     optimizer = optim.Adam(model.parameters(), lr=args.learning_rate)
@@ -241,6 +303,7 @@ def main():
     parser.add_argument('--epochs', type=int, default=100)
     parser.add_argument('--test_size', type=float, default=0.2)
     parser.add_argument('--random_state', type=int, default=42)
+    parser.add_argument('--checkpoint', type=str, default=None, help='Path to checkpoint file to continue training')
     args = parser.parse_args()
     
     # Create datasets
@@ -256,7 +319,7 @@ def main():
     model = RNAModel(args)
     
     # Train model
-    train_model(model, train_loader, test_loader, args)
+    train_model(model, train_loader, test_loader, args, checkpoint_path=args.checkpoint)
 
 if __name__ == "__main__":
     main() 
