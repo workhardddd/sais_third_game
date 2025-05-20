@@ -4,6 +4,9 @@ FROM python:3.8-slim
 # Set the working directory in the container
 WORKDIR /app
 
+# 设置pip国内源，尝试不同的源
+RUN pip config set global.index-url https://mirrors.aliyun.com/pypi/simple
+
 # Create required directories
 RUN mkdir -p /app /saisresult /saisdata
 
