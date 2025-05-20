@@ -111,8 +111,13 @@ def predict_sequences(model, coords_dir, device):
     return pd.DataFrame(results)
 
 def main():
+    # Get environment variables
+    input_dir = os.getenv('INPUT_DIR', '/saisdata')
+    output_dir = os.getenv('OUTPUT_DIR', '/saisresult')
+    output_file = os.getenv('OUTPUT_FILE', 'submit.csv')
+    
     # Create output directory
-    os.makedirs('./saisresult', exist_ok=True)
+    os.makedirs(output_dir, exist_ok=True)
     
     # Set device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -132,7 +137,7 @@ def main():
     model = RNAModel(args).to(device)
     
     # Load trained model
-    checkpoint_path = "best_model.pth"
+    checkpoint_path = "/app/best_model.pth"
     if os.path.exists(checkpoint_path):
         print(f"Loading checkpoint from {checkpoint_path}")
         model.load_state_dict(torch.load(checkpoint_path, map_location=device))
@@ -142,11 +147,11 @@ def main():
         return
     
     # Process test data and generate predictions
-    coords_dir = os.path.join("RNA_design_public", "RNA_design_public", "RNAdesignv1", "test", "coords")
+    coords_dir = os.path.join(input_dir, "coords")
     results_df = predict_sequences(model, coords_dir, device)
     
     # Save results
-    output_path = os.path.join("saisresult", "submit.csv")
+    output_path = os.path.join(output_dir, output_file)
     results_df.to_csv(output_path, index=False)
     print(f"Results saved to {output_path}")
 
