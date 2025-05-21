@@ -1,18 +1,16 @@
-# 基础科学计算和机器学习
 numpy>=1.19.0
 torch>=1.7.0
-torch-geometric>=2.0.0  # 用于图神经网络
-torch-scatter>=2.0.0    # 用于图神经网络中的scatter操作
+torch-geometric>=2.0.0  
+torch-scatter>=2.0.0    
 
-# 生物信息学相关
-biotite>=0.36.0        # 用于处理生物分子结构
-biopython>=1.79        # 用于处理序列数据
+biotite>=0.36.0        
+biopython>=1.79        
 
-# 数据处理和机器学习工具
-scikit-learn>=0.24.0   # 用于数据集划分等
-tqdm>=4.50.0          # 用于显示进度条
 
-# 其他工具
-typing                 # Python标准库
-pathlib               # Python标准库
-argparse              # Python标准库
+scikit-learn>=0.24.0   
+tqdm>=4.50.0       
+
+
+typing                 
+pathlib               
+argparse              
