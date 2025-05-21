@@ -19,12 +19,9 @@ RUN apt-get update && apt-get install -y \
     git \
     && rm -rf /var/lib/apt/lists/*
 
-# Install PyTorch and related packages
-RUN pip install --no-cache-dir torch torchvision torchaudio
-
-# Install PyTorch Geometric and its dependencies
-RUN pip install --no-cache-dir torch-scatter torch-sparse torch-cluster torch-spline-conv -f https://data.pyg.org/whl/torch-1.7.0+cu101.html
-RUN pip install --no-cache-dir torch-geometric
+# 逐个安装依赖包，以便找出冲突的包
+COPY requirements.txt .
+RUN cat requirements.txt | xargs -n 1 pip install
 
 # Install other Python dependencies
 RUN pip install --no-cache-dir \
