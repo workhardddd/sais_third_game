@@ -19,7 +19,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
-RUN pip install --no-cache-dir torch numpy pandas tqdm biopython scikit-learn geometric typing pathlib argparse
+RUN pip install --no-cache-dir torch numpy pandas tqdm biopython scikit-learn torch-geometric typing pathlib argparse
 
 # Verify gvp_src directory exists
 RUN if [ ! -d "/app/gvp_src" ]; then \
